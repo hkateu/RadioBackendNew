@@ -13,10 +13,10 @@ object Model {
   val xa: Transactor[IO] = Transactor.fromDriverManager[IO](
     "com.mysql.cj.jdbc.Driver",
     //local mysql server
-    //"jdbc:mysql://localhost/radio",
+    "jdbc:mysql://localhost/radio",
     //container mysql server
     //"jdbc:mysql://127.0.0.1:3306/radio?enabledTLSProtocols=TLSv1.2", //this works
-    "jdbc:mysql://host.docker.internal:3306/radio?enabledTLSProtocols=TLSv1.2",
+    //"jdbc:mysql://host.docker.internal:3306/radio?enabledTLSProtocols=TLSv1.2",
     //"jdbc:mysql://xonaldb:3306/radio?autoReconnect=true&useSSL=false",
     //"jdbc:mysql://localhost:6603/radio?user=herb&password=password1",
     //local username
