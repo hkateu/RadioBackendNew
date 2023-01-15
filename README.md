@@ -18,7 +18,7 @@ The following should be installed on your system.
 ## Step1
 Clone the repo using the code below
 ```
-clone http://git.radioback.com
+clone https://github.com/hkateu/RadioBackendNew.git
 ```
 This will pull all the files and folders onto you local machine
 
