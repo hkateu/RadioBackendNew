@@ -30,5 +30,5 @@ libraryDependencies ++= Seq(
 
 lazy val app = (project in file("."))
   .settings(
-    assembly / mainClass := Some("src.main.scala.Controller")
+    assembly / mainClass := Some("com.xonal.Controller")
   )

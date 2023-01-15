@@ -1,4 +1,4 @@
-package src.main.scala
+package com.xonal
 
 //Controller imports
 //import cats._
@@ -14,6 +14,8 @@ import cats.effect.unsafe.implicits.global
 import org.http4s._
 import org.http4s.dsl.io._
 import org.http4s.circe._
+import org.http4s.server.middleware.Logger
+
 //import org.http4s.dsl.impl._
 //import org.http4s.headers._
 import org.http4s.implicits._
@@ -31,6 +33,7 @@ import doobie.implicits.javasql._
 import doobie.util.ExecutionContexts
 import cats.effect.unsafe.IORuntime
 import org.http4s.server.Router
+import scala.concurrent.Future
 
 
 object Controller extends IOApp {
@@ -39,6 +42,7 @@ object Controller extends IOApp {
   case class User(firstName: String, lastName: String)
   case class Radio(radioId: Int, station: String, stnid: String, frequency: String, location: String, url: String, likes: Int)
   case class Shows(showsid:Int, Shows: String, showtime: java.sql.Timestamp, showdesc: String, likes: Option[Int])
+  case class Radio2(name: String)
 
   //implicit val HelloEncoder: Encoder[Hello] =
   //  Encoder.instance { (hello: Hello) =>
@@ -46,10 +50,20 @@ object Controller extends IOApp {
   //  }
 
   //Transactor with setting for database connection
+  //using ip 127.0.0.1
   val xa: Transactor[IO] = Transactor.fromDriverManager[IO](
     "com.mysql.cj.jdbc.Driver",
-    "jdbc:mysql://localhost/radio",
+    //local mysql server
+    //"jdbc:mysql://localhost/radio",
+    //container mysql server
+    //"jdbc:mysql://127.0.0.1:3306/radio?enabledTLSProtocols=TLSv1.2", //this works
+    "jdbc:mysql://host.docker.internal:3306/radio?enabledTLSProtocols=TLSv1.2",
+    //"jdbc:mysql://xonaldb:3306/radio?autoReconnect=true&useSSL=false",
+    //"jdbc:mysql://localhost:6603/radio?user=herb&password=password1",
+    //local username
     "herb",
+    //container username
+    //"root",
     "password"
   )
 
@@ -61,10 +75,13 @@ object Controller extends IOApp {
   }
 
   //getting all radio stations
+  //IO[List[Radio2]]
   def getRadios: IO[List[Radio]] = {
     val query = sql"select radioId, station, stnid, frequency, location, url, likes from radio".query[Radio]
     val action = query.to[List]
     action.transact(xa)
+    //val myRadios: List[Radio2] = List(Radio2("Sanyu"), Radio2("Capital"))
+    //myRadios
   }
 
   //getting radio station by id
@@ -141,6 +158,11 @@ object Controller extends IOApp {
     "likes" -> radio.likes.asJson
   )
 
+  implicit val Radio2Encoder: Encoder[Radio2] = radio => Json.obj(
+    "name" -> radio.name.asJson
+  )
+
+
   implicit val ShowsEncoder: Encoder[Shows] = shows => Json.obj(
     "showsid" -> shows.showsid.asJson,
     "shows" -> shows.Shows.asJson,
@@ -167,6 +189,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
   val allRoutes = HttpRoutes.of[IO] {
     case req @ GET -> Root/ "getradios" / "" =>
       getRadios.flatMap(rdios => Ok(rdios.asJson))
+      //Ok(getRadios.asJson)
 
     case req @ GET -> Root/ "shows" =>
       getShows(1).flatMap(shows => Ok(shows.asJson))
@@ -196,13 +219,14 @@ import scala.concurrent.ExecutionContext.Implicits.global
        //     .build
  // val resp = csrf.validate()(allRoutes)
 
+  val finalHttpApp = Logger.httpApp(true, true)(corsMethodSvc)
 
   override def run(args: List[String]): IO[ExitCode] =
     EmberServerBuilder
       .default[IO]
       .withHost(ipv4"0.0.0.0")
       .withPort(port"9000")
-      .withHttpApp(corsMethodSvc)
+      .withHttpApp(finalHttpApp)
       .build
       .use(_ => IO.never)
       .as(ExitCode.Success)
