@@ -24,10 +24,11 @@ import org.http4s.server.middleware._
 import org.http4s.server.Router
 import org.http4s.ember.server.EmberServerBuilder
 import com.comcast.ip4s._
+import scala.concurrent.duration._
+import scala.concurrent.ExecutionContext.Implicits.global
+import cats.data.Kleisli
 
-
-
-object Controller extends IOApp {
+object Helpers {
  implicit val TimestampFormat : Encoder[java.sql.Timestamp] with Decoder[java.sql.Timestamp] =
     new Encoder[java.sql.Timestamp] with Decoder[java.sql.Timestamp] {
     override def apply(a: java.sql.Timestamp): Json = Encoder.encodeString.apply(a.toString)
@@ -61,33 +62,39 @@ object Controller extends IOApp {
   implicit val UserDecoder = jsonOf[IO, User]
   implicit val RadioDecoder = jsonOf[IO, Radio]
   implicit val ShowsDecoder = jsonOf[IO, Shows]
-
-  val jsonApp = HttpRoutes.of[IO] {
-    case req @ GET -> Root / "hello" / name =>
-      Ok(s"Hello $name")
-  }.orNotFound
+}
 
 
-import scala.concurrent.ExecutionContext.Implicits.global
-  val allRoutes = HttpRoutes.of[IO] {
-    case req @ GET -> Root/ "getradios" / "" =>
-      getRadios.flatMap(rdios => Ok(rdios.asJson))
-    case req @ GET -> Root/ "shows" =>
-      getShows(1).flatMap(shows => Ok(shows.asJson))
-  }.orNotFound
-
-  import scala.concurrent.duration._
-
-  val methodConfig = CORSConfig(
+trait AppRoutes{
+  val allRoutes: Kleisli[IO, Request[IO], Response[IO]]
+ val methodConfig = CORSConfig(
     anyOrigin = true,
     anyMethod = false,
     allowedMethods = Some(Set("GET", "POST")),
     allowCredentials = true,
     maxAge = 1.day.toSeconds
   )
-   val corsMethodSvc = CORS(allRoutes, methodConfig)
 
-  val finalHttpApp = Logger.httpApp(true, true)(corsMethodSvc)
+  def corMethodSvc(routes: Kleisli[IO, Request[IO], Response[IO]], config:  CORSConfig = methodConfig) = {
+    CORS(routes, config)
+  }
+  val finalHttpApp: HttpApp[IO]
+}
+class CorsRoutes extends AppRoutes{
+ import Helpers._
+ override val allRoutes : Kleisli[IO, Request[IO], Response[IO]] = HttpRoutes.of[IO] {
+    case req @ GET -> Root/ "getradios" / "" =>
+      getRadios.flatMap(rdios => Ok(rdios.asJson))
+    case req @ GET -> Root/ "shows" =>
+      getShows(1).flatMap(shows => Ok(shows.asJson))
+  }.orNotFound
+
+
+ override val finalHttpApp = Logger.httpApp(true, true)(corMethodSvc(allRoutes))
+}
+
+object Controller extends IOApp {
+val finalHttpApp = new CorsRoutes().finalHttpApp
 
   override def run(args: List[String]): IO[ExitCode] =
     EmberServerBuilder
